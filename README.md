@@ -56,6 +56,63 @@ Open [http://localhost:8501](http://localhost:8501) in your browser.
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Streamlit UI (app.py)                    │
+│  ┌──────────┐    ┌──────────────┐    ┌────────────────────────┐ │
+│  │ Audio    │───▶│ Transcription│───▶│ LLM Processing         │ │
+│  │ Capture  │    │              │    │                        │ │
+│  │          │    │  Whisper     │    │  Ollama / Gemini       │ │
+│  └──────────┘    └──────────────┘    └───────────┬────────────┘ │
+│       ▲                                          │              │
+│  Browser Mic                                     ▼              │
+│  File Upload                            ┌────────────────┐     │
+│  Paste Text                             │ Structured JSON │     │
+│                                         │ (summary,       │     │
+│                                         │  action_items,  │     │
+│                                         │  decisions)     │     │
+│                                         └───────┬────────┘     │
+│                                                 │              │
+│                                    ┌────────────┴───────────┐  │
+│                                    │  Export: JSON / PDF     │  │
+│                                    └────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Component Details
+
+| Component | Model / Tool | Details |
+|-----------|-------------|---------|
+| **Speech-to-Text** | OpenAI Whisper | Transformer-based encoder-decoder. Trained on 680k hours of multilingual audio. Converts speech → text locally. |
+| **Whisper (base)** | 74M parameters | 6 encoder + 6 decoder layers. Fast (~30s for 1 min audio). ~139 MB. |
+| **Whisper (medium)** | 769M parameters | 24 encoder + 24 decoder layers. More accurate. ~1.5 GB. |
+| **LLM (local)** | LLaMA 3.2 (3B) | Meta's 3-billion parameter model via Ollama. Extracts structured JSON from transcript. ~2 GB. |
+| **LLM (cloud)** | Google Gemini Flash | Optional cloud fallback. Requires API key. |
+| **Frontend** | Streamlit 1.41 | Python-based web UI. Browser handles mic via WebRTC. |
+| **PDF Export** | fpdf2 | Generates formatted PDF reports from structured JSON. |
+
+### Data Flow
+
+```
+1. AUDIO INPUT
+   Browser mic (WebRTC) → WAV file (48kHz, 16-bit PCM, mono)
+   
+2. TRANSCRIPTION (Whisper)
+   WAV → Log-Mel Spectrogram → Encoder (Transformer) → Decoder → Text
+   Model cached in ~/.cache/whisper/ after first download
+   
+3. STRUCTURED EXTRACTION (LLM)
+   Transcript + Prompt → Ollama API (localhost:11434) → JSON response
+   Prompt engineering extracts: summary, action_items[], decisions[]
+   
+4. EXPORT
+   JSON dict → PDF (fpdf2) + JSON download
+```
+
+---
+
 ## How It Works
 
 ```
